@@ -12,7 +12,7 @@ def create_app():
     from .api.stores import bp as stores_bp
     from .api.cart import bp as cart_bp
     from .api.orders import bp as orders_bp
-    from .api.manager import bp as manager_bp
+    from .api.admin import bp as manager_bp
     from .api.stats import bp as stats_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
