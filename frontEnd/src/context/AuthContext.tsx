@@ -1,43 +1,67 @@
-import { createContext, useContext, useState } from 'react';
-import type { ReactNode } from 'react';
-import type{ User, Customer } from '../types/user_types';
+import React, { createContext, useContext, useState, useEffect} from 'react';
+import type{ ReactNode } from 'react';
+import type{ User, Customer, AuthState } from '../types/user_types';
 
-interface AuthContextType {
-  user: User | null;
-  customer: Customer | null;
-  isAdmin: boolean;
+interface AuthContextType extends AuthState {
   login: (user: User, customer?: Customer) => void;
   logout: () => void;
+  updateCustomer: (customer: Customer) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
 
-  const login = (userData: User, customerData?: Customer) => {
-    setUser(userData);
-    if (customerData) {
-      setCustomer(customerData);
+  // Load from localStorage on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    const savedCustomer = localStorage.getItem('customer');
+    
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+    if (savedCustomer) {
+      setCustomer(JSON.parse(savedCustomer));
+    }
+  }, []);
+
+  const login = (user: User, customer?: Customer) => {
+    setUser(user);
+    setCustomer(customer || null);
+    
+    localStorage.setItem('user', JSON.stringify(user));
+    if (customer) {
+      localStorage.setItem('customer', JSON.stringify(customer));
     }
   };
 
   const logout = () => {
     setUser(null);
     setCustomer(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('customer');
   };
 
-  const isAdmin = user?.role === 'admin';
+  const updateCustomer = (customer: Customer) => {
+    setCustomer(customer);
+    localStorage.setItem('customer', JSON.stringify(customer));
+  };
 
-  return (
-    <AuthContext.Provider value={{ user, customer, isAdmin, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value: AuthContextType = {
+    user,
+    customer,
+    isAuthenticated: !!user,
+    isAdmin: user?.role === 'admin',
+    login,
+    logout,
+    updateCustomer,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// Custom hook to use auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {

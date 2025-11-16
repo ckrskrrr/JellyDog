@@ -1,190 +1,189 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../components/layout/Navbar';
-import { useAuth } from '../context/AuthContext';
 import { useStore } from '../context/StoreContext';
-import type{ Store, ProductWithStock } from '../types/product_types';
+import { mockGetProductsWithStock, mockGetProductsByCategory } from '../lib/MockProductData';
+import type { ProductWithStock } from '../types/product_types';
 
 const HomePage = () => {
-  const [stores, setStores] = useState<Store[]>([]);
-  const [products, setProducts] = useState<ProductWithStock[]>([]);
-  const [showStoreModal, setShowStoreModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
-  const { selectedStore, setSelectedStore } = useStore();
+  const { selectedStore } = useStore();
+  
+  const [products, setProducts] = useState<ProductWithStock[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([
+    'Birds',
+    'Ocean',
+    'Pets',
+  ]); // All categories selected by default
 
-  // Fetch all stores on mount
+  const categories = [
+    { name: 'Birds', emoji: '🐦' },
+    { name: 'Ocean', emoji: '🐟' },
+    { name: 'Pets', emoji: '🐶' },
+  ];
+
   useEffect(() => {
-    fetchStores();
-  }, []);
-
-  // Fetch products when store is selected
-  useEffect(() => {
-    if (selectedStore) {
-      fetchProducts(selectedStore.store_id);
-    }
-  }, [selectedStore]);
-
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-    }
-  }, [user, navigate]);
-
-  const fetchStores = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/stores');
-      const data = await response.json();
-      setStores(data);
-    } catch (error) {
-      console.error('Error fetching stores:', error);
-    }
-  };
-
-  const fetchProducts = async (storeId: number) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`http://localhost:5000/api/products?store_id=${storeId}`);
-      const data = await response.json();
-      setProducts(data);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStoreChange = (store: Store) => {
-    if (selectedStore?.store_id !== store.store_id) {
-      // Show warning if switching stores
-      if (selectedStore) {
-        const confirmed = window.confirm(
-          `Switching to ${store.city} store. Your current cart will be saved. Continue?`
-        );
-        if (!confirmed) return;
+    const fetchProducts = async () => {
+      if (!selectedStore) {
+        setLoading(false);
+        return;
       }
-      setSelectedStore(store);
-    }
-    setShowStoreModal(false);
+
+      setLoading(true);
+      try {
+        const productsData =
+          selectedCategories.length === 0
+            ? await mockGetProductsWithStock(selectedStore.store_id)
+            : await mockGetProductsByCategory(
+                selectedStore.store_id,
+                selectedCategories
+              );
+        setProducts(productsData);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, [selectedStore, selectedCategories]);
+
+  const handleCategoryToggle = (categoryName: string) => {
+    setSelectedCategories((prev) => {
+      if (prev.includes(categoryName)) {
+        return prev.filter((cat) => cat !== categoryName);
+      } else {
+        return [...prev, categoryName];
+      }
+    });
   };
 
   const handleProductClick = (productId: number) => {
     navigate(`/product/${productId}`);
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Store Selection Bar */}
-        <div className="mb-8 flex items-center justify-between bg-white p-4 rounded-lg shadow">
-          <div>
-            <h2 className="text-lg font-semibold">Selected Store:</h2>
-            {selectedStore ? (
-              <p className="text-gray-600">
-                {selectedStore.street}, {selectedStore.city}, {selectedStore.state} {selectedStore.zip}
-              </p>
-            ) : (
-              <p className="text-red-500">Please select a store to start shopping</p>
-            )}
-          </div>
+  // If no store selected, show message
+  if (!selectedStore) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            Please select a store first
+          </h2>
           <button
-            onClick={() => setShowStoreModal(true)}
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+            onClick={() => navigate('/select-store')}
+            className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors"
           >
-            {selectedStore ? 'Change Store' : 'Select Store'}
+            Select Store
           </button>
         </div>
-
-        {/* Products Grid */}
-        {selectedStore ? (
-          loading ? (
-            <div className="text-center py-20">
-              <p className="text-gray-500">Loading products...</p>
-            </div>
-          ) : products.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {products.map((product) => (
-                <div
-                  key={product.product_id}
-                  onClick={() => handleProductClick(product.product_id)}
-                  className="bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer overflow-hidden"
-                >
-                  <img
-                    src={product.img_url}
-                    alt={product.product_name}
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className="p-4">
-                    <h3 className="font-semibold text-lg mb-1">{product.product_name}</h3>
-                    <p className="text-gray-500 text-sm mb-2">{product.category}</p>
-                    <div className="flex justify-between items-center">
-                      <p className="text-blue-600 font-bold">${product.price.toFixed(2)}</p>
-                      <p className="text-sm text-gray-500">Stock: {product.stock}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-20">
-              <p className="text-gray-500">No products available at this store</p>
-            </div>
-          )
-        ) : (
-          <div className="text-center py-20">
-            <p className="text-gray-500">Please select a store to view products</p>
-          </div>
-        )}
       </div>
+    );
+  }
 
-      {/* Store Selection Modal */}
-      {showStoreModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h2 className="text-2xl font-bold mb-4">Select a Store</h2>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {stores.map((store) => (
-                <button
-                  key={store.store_id}
-                  onClick={() => handleStoreChange(store)}
-                  className={`w-full text-left p-4 rounded-lg border-2 hover:border-blue-500 transition ${
-                    selectedStore?.store_id === store.store_id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200'
-                  }`}
-                >
-                  <p className="font-semibold">{store.city} Store</p>
-                  <p className="text-sm text-gray-600">
-                    {store.street}, {store.city}, {store.state} {store.zip}
-                  </p>
-                </button>
-              ))}
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">Loading products...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-[1400px] mx-auto px-8 py-8">
+        <div className="flex gap-8">
+          {/* Left Sidebar - Category Filters */}
+          <div className="w-48 flex-shrink-0">
+            <div className="bg-white rounded-lg border border-gray-200 p-4 sticky top-8">
+              <h3 className="font-bold text-gray-900 mb-4">Categories</h3>
+              <div className="space-y-3">
+                {categories.map((category) => (
+                  <label
+                    key={category.name}
+                    className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.includes(category.name)}
+                      onChange={() => handleCategoryToggle(category.name)}
+                      className="w-4 h-4 text-cyan-400 rounded focus:ring-2 focus:ring-cyan-400"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {category.emoji} {category.name}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
-            <button
-              onClick={() => setShowStoreModal(false)}
-              className="mt-4 w-full bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
-            >
-              Cancel
-            </button>
+          </div>
+
+          {/* Main Content - Product Grid */}
+          <div className="flex-1">
+            {products.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-600">No products found in selected categories.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-6">
+                {products.map((product) => {
+                  const isOutOfStock = product.stock === 0;
+
+                  return (
+                    <div
+                      key={product.product_id}
+                      onClick={() => handleProductClick(product.product_id)}
+                      className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                    >
+                      {/* Product Image */}
+                      <div className="relative">
+                        <img
+                          src={product.img_url}
+                          alt={product.product_name}
+                          className={`w-full h-64 object-cover ${
+                            isOutOfStock ? 'opacity-40 grayscale' : ''
+                          }`}
+                          onError={(e) => {
+                            // Fallback if image doesn't load
+                            e.currentTarget.src = `https://via.placeholder.com/300x300/cccccc/666666?text=${encodeURIComponent(
+                              product.product_name
+                            )}`;
+                          }}
+                        />
+                        {isOutOfStock && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="text-center">
+                              <p className="text-gray font-bold text-lg">
+                                SOLD OUT
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Product Info */}
+                      <div className="p-4">
+                        <h3 className={`font-medium mb-1 ${
+                          isOutOfStock ? 'text-gray-400' : 'text-gray-900'
+                        }`}>
+                          {product.product_name}
+                        </h3>
+                        <p className={`font-bold ${
+                          isOutOfStock ? 'text-gray-400' : 'text-gray-900'
+                        }`}>
+                          ${product.price.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">Body text.</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
-      )}
-
-      {/* Admin Floating Add Button */}
-      {isAdmin && (
-        <button
-          onClick={() => {/* TODO: Open add product modal */}}
-          className="fixed bottom-8 right-8 bg-blue-500 text-white w-14 h-14 rounded-full shadow-lg hover:bg-blue-600 flex items-center justify-center text-3xl"
-          title="Add Product"
-        >
-          +
-        </button>
-      )}
+      </div>
     </div>
   );
 };

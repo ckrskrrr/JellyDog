@@ -1,6 +1,5 @@
-import type{ createContext, useContext, useState } from 'react';
-import type { ReactNode } from 'react';
-
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type{ ReactNode } from 'react';
 import type{ Store } from '../types/product_types';
 
 interface StoreContextType {
@@ -11,21 +10,36 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
-export const StoreProvider = ({ children }: { children: ReactNode }) => {
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [selectedStore, setSelectedStoreState] = useState<Store | null>(null);
 
-  const clearStore = () => {
-    setSelectedStore(null);
+  // Load from localStorage on mount
+  useEffect(() => {
+    const savedStore = localStorage.getItem('selectedStore');
+    if (savedStore) {
+      setSelectedStoreState(JSON.parse(savedStore));
+    }
+  }, []);
+
+  const setSelectedStore = (store: Store) => {
+    setSelectedStoreState(store);
+    localStorage.setItem('selectedStore', JSON.stringify(store));
   };
 
-  return (
-    <StoreContext.Provider value={{ selectedStore, setSelectedStore, clearStore }}>
-      {children}
-    </StoreContext.Provider>
-  );
+  const clearStore = () => {
+    setSelectedStoreState(null);
+    localStorage.removeItem('selectedStore');
+  };
+
+  const value: StoreContextType = {
+    selectedStore,
+    setSelectedStore,
+    clearStore,
+  };
+
+  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 };
 
-// Custom hook to use store context
 export const useStore = () => {
   const context = useContext(StoreContext);
   if (!context) {

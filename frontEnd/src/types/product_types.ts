@@ -27,11 +27,28 @@ export interface ProductWithStock extends Product {
 }
 
 // For admin adding new products
-export interface NewProductData {
+export interface CreateProductRequest {
     product_name: string;
     category: string;
     price: number;
     image: File; // The actual image file to upload
     stock: number;
     store_id: number;
+}
+
+// Add existing product to store (admin)
+export interface AddProductToStoreRequest {
+    product_id: number;
+    store_id: number;
+    stock: number;
+}
+
+// Update product request (admin)
+export interface UpdateProductRequest {
+    product_id: number;
+    product_name?: string;
+    category?: string;
+    price?: number;
+    img_url?: string;
+    stock?: number; // Store-specific
 }

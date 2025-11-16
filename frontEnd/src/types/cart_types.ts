@@ -1,34 +1,21 @@
 // Cart and order types
-
 import type { Product } from './product_types';
 
+// Cart item (frontend state)
 export interface CartItem {
-  order_item_id?: number; // Optional because new items won't have this yet
   product: Product;
   quantity: number;
-  unit_price: number;
+  stock: number; // Available stock at selected store
 }
 
-export interface Order {
-  order_id: number;
-  customer_id: number;
-  order_number: number;
-  order_datetime: number; // timestamp
-  total_price: number;
-  status: 'complete' | 'in_cart';
-  store_id: number;
+// Cart state
+export interface CartState {
+  items: CartItem[];
+  store_id: number | null;
 }
 
-export interface OrderItem {
-  order_item_id: number;
-  order_id: number;
+// Add to cart request
+export interface AddToCartRequest {
   product_id: number;
-  unit_price: number;
   quantity: number;
-  is_return: boolean;
-}
-
-// Combined type for displaying order details with product info
-export interface OrderWithItems extends Order {
-  items: (OrderItem & { product: Product })[];
 }
