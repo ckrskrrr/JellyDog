@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { mockLogin } from '../lib/MockUserCreate';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -26,30 +25,14 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      // Using mock API for testing
-      // TODO: Replace with actual API call to backend when ready
-      const data = await mockLogin(formData.username, formData.password);
+      // Call login from AuthContext - it now handles the API call
+      await login(formData.username, formData.password);
       
-      // Real API call (commented out for now):
-      // const response = await fetch('http://localhost:5000/api/login', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     user_name: formData.username,
-      //     password: formData.password,
-      //   }),
-      // });
-      // if (!response.ok) {
-      //   throw new Error('Login failed');
-      // }
-      // const data = await response.json();
-      
-      login(data.user, data.customer);
+      // Redirect to home page after successful login
       navigate('/home');
-    } catch (err) {
-      setError('Invalid username or password');
+    } catch (err: any) {
+      // Display error message from backend
+      setError(err.message || 'Invalid username or password');
       console.error('Login error:', err);
     } finally {
       setLoading(false);
@@ -73,6 +56,7 @@ const LoginPage = () => {
               onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent"
               required
+              disabled={loading}
             />
           </div>
 
@@ -89,12 +73,15 @@ const LoginPage = () => {
               onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent"
               required
+              disabled={loading}
             />
           </div>
 
           {/* Error Message */}
           {error && (
-            <div className="text-red-500 text-sm text-center">{error}</div>
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
           )}
 
           {/* Sign In Button */}

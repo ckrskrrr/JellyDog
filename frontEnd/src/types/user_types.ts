@@ -3,7 +3,7 @@
 export interface User{
     uid: number;
     user_name: string;
-    password: string;
+    //password: string;
     role: 'customer' | 'admin';
 }
 
