@@ -1,14 +1,16 @@
-# 1. Clone your repo
+## 1. Clone your repo
 git clone <link for the repo>
+
+## 2. In your terminal
 cd frontend
 
-# 2. Install everything
+## 3. Install everything
 npm install
 
-# 3. Run it
+## 4. Run it
 npm run dev
 
-# 4. Open this url in your browser
+## 5. Open this url in your browser
 http://localhost:5173/
 
-# 5. That's it
+## 6. That's it
