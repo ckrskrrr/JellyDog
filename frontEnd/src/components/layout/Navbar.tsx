@@ -12,7 +12,7 @@ const Navbar = () => {
   const { getCartCount } = useCart();
 
   const handleProfileClick = () => {
-    if (isAuthenticated) navigate('/orders');
+    if (isAuthenticated) navigate('/account');
     else navigate('/login');
   };
 

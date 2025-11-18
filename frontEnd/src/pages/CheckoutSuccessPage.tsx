@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 
 const CheckoutSuccessPage = () => {
+  const navigate = useNavigate();
   const { clearCart } = useCart();
   const hasCleared = useRef(false);
 
@@ -14,11 +16,11 @@ const CheckoutSuccessPage = () => {
   }, []); // Empty dependency array - only run once
 
   const handleViewOrders = () => {
-    window.location.href = '/orders';
+    navigate('/account');
   };
 
   const handleContinueShopping = () => {
-    window.location.href = '/home';
+    navigate('/home');
   };
 
   return (

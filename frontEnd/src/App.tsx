@@ -19,6 +19,7 @@ import OrderHistoryPage from "./pages/OrderHistoryPage";
 import OrderDetailPage from "./pages/OrderDetailPage";
 import PersonalInfoPage from './pages/PersonalInfoPage';
 import SelectStorePage from './pages/SelectStorePage';
+import UserPage from './pages/UserPage';
 import Layout from "./components/layout/Layout";
 
 // Protected Route wrapper, direct to login when click
@@ -42,6 +43,14 @@ function AppRoutes() {
         <Route path="/select-store" element={<SelectStorePage />} />
 
         {/* Protected Routes - Require login */}
+        <Route
+          path="/account"
+          element={
+            <ProtectedRoute>
+              <UserPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/cart"
           element={
