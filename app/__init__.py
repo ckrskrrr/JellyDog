@@ -6,6 +6,8 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
+
     # Blueprints
     from .api.auth import bp as auth_bp
     from .api.customers import bp as customers_bp
