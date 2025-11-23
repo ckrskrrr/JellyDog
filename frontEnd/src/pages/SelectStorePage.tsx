@@ -1,20 +1,35 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
-import { mockGetStores } from '../lib/MockStoreData';
-import type { Store } from '../types/product_types';
+
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
+
+interface Store {
+  store_id: number;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+}
 
 const SelectStorePage = () => {
   const navigate = useNavigate();
   const { selectedStore, setSelectedStore } = useStore();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [localSelectedId, setLocalSelectedId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchStores = async () => {
       try {
-        const storeData = await mockGetStores();
+        const response = await fetch(`${API_BASE_URL}/stores`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch stores');
+        }
+        
+        const storeData = await response.json();
         setStores(storeData);
         
         // If no store selected yet, default to first store
@@ -23,8 +38,9 @@ const SelectStorePage = () => {
         } else if (selectedStore) {
           setLocalSelectedId(selectedStore.store_id);
         }
-      } catch (error) {
-        console.error('Error fetching stores:', error);
+      } catch (err: any) {
+        console.error('Error fetching stores:', err);
+        setError(err.message || 'Failed to load stores');
       } finally {
         setLoading(false);
       }
@@ -44,14 +60,29 @@ const SelectStorePage = () => {
   };
 
   const getStoreName = (index: number): string => {
-    const names = ['A', 'B', 'C'];
-    return `Store ${names[index] || index + 1}`;
+    return `Store ${index + 1}`;
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-600">Loading stores...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">{error}</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-blue-600 hover:text-blue-700 underline"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }

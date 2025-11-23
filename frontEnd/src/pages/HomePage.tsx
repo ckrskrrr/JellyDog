@@ -1,8 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
-import { mockGetProductsWithStock, mockGetProductsByCategory } from '../lib/MockProductData';
-import type { ProductWithStock } from '../types/product_types';
+
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
+
+interface ProductWithStock {
+  product_id: number;
+  product_name: string;
+  category: string;
+  price: number;
+  img_url: string;
+  stock: number;
+}
+
+// Helper function to convert GitHub URLs to raw format
+const fixGitHubImageUrl = (url: string): string => {
+  if (url.includes('github.com') && url.includes('/blob/')) {
+    return url
+      .replace('https://github.com/', 'https://raw.githubusercontent.com/')
+      .replace('/blob/', '/');
+  }
+  return url;
+};
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -10,6 +29,7 @@ const HomePage = () => {
   
   const [products, setProducts] = useState<ProductWithStock[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([
     'Birds',
     'Ocean',
@@ -17,7 +37,7 @@ const HomePage = () => {
   ]); // All categories selected by default
 
   const categories = [
-    { name: 'Birds', emoji: '🐦' },
+    { name: 'Birds', emoji: '🦜' },
     { name: 'Ocean', emoji: '🐟' },
     { name: 'Pets', emoji: '🐶' },
   ];
@@ -30,17 +50,28 @@ const HomePage = () => {
       }
 
       setLoading(true);
+      setError('');
       try {
-        const productsData =
-          selectedCategories.length === 0
-            ? await mockGetProductsWithStock(selectedStore.store_id)
-            : await mockGetProductsByCategory(
-                selectedStore.store_id,
-                selectedCategories
-              );
-        setProducts(productsData);
-      } catch (error) {
-        console.error('Error fetching products:', error);
+        // Fetch products for the selected store
+        const response = await fetch(
+          `${API_BASE_URL}/stores/products?store_id=${selectedStore.store_id}`
+        );
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch products');
+        }
+        
+        const productsData = await response.json();
+        
+        // Filter by selected categories on the frontend
+        const filteredProducts = selectedCategories.length === 0
+          ? productsData
+          : productsData.filter((p: ProductWithStock) => selectedCategories.includes(p.category));
+        
+        setProducts(filteredProducts);
+      } catch (err: any) {
+        console.error('Error fetching products:', err);
+        setError(err.message || 'Failed to load products');
       } finally {
         setLoading(false);
       }
@@ -86,6 +117,22 @@ const HomePage = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-600">Loading products...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">{error}</div>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-blue-600 hover:text-blue-700 underline"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
@@ -139,7 +186,7 @@ const HomePage = () => {
                       {/* Product Image */}
                       <div className="relative">
                         <img
-                          src={product.img_url}
+                          src={fixGitHubImageUrl(product.img_url)}
                           alt={product.product_name}
                           className={`w-full h-64 object-cover ${
                             isOutOfStock ? 'opacity-40 grayscale' : ''

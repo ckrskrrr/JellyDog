@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { mockSignup } from '../lib/MockUserCreate';
 
 const SignUpPage = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { signup } = useAuth(); // Use signup instead of login
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -39,33 +38,13 @@ const SignUpPage = () => {
     setLoading(true);
 
     try {
-      // Using mock API for testing
-      // TODO: Replace with actual API call to backend when ready
-      const data = await mockSignup(formData.username, formData.password);
-      
-      // Real API call (commented out for now):
-      // const response = await fetch('http://localhost:5000/api/signup', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     user_name: formData.username,
-      //     password: formData.password,
-      //   }),
-      // });
-      // if (!response.ok) {
-      //   throw new Error('Signup failed');
-      // }
-      // const data = await response.json();
-      
-      // Log the user in (no customer info yet)
-      login(data.user);
+      // Use the signup method from AuthContext - it handles the API call
+      await signup(formData.username, formData.password);
       
       // Redirect to personal info page to collect customer details
       navigate('/personal-info');
-    } catch (err) {
-      setError('Signup failed. Username might already exist.');
+    } catch (err: any) {
+      setError(err.message || 'Signup failed. Username might already exist.');
       console.error('Signup error:', err);
     } finally {
       setLoading(false);
@@ -126,7 +105,9 @@ const SignUpPage = () => {
 
           {/* Error Message */}
           {error && (
-            <div className="text-red-500 text-sm text-center">{error}</div>
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
           )}
 
           {/* Next Button */}

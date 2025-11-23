@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { mockCreateCustomer } from '../lib/MockUserCreate';
 
 const PersonalInfoPage = () => {
   const navigate = useNavigate();
-  const { user, updateCustomer } = useAuth();
+  const { user, customer, updateCustomer } = useAuth();
   const [formData, setFormData] = useState({
     customerName: '',
     phoneNumber: '',
@@ -17,6 +16,26 @@ const PersonalInfoPage = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Load existing customer data when component mounts
+  useEffect(() => {
+    if (customer) {
+      // User has existing customer info - populate form
+      setFormData({
+        customerName: customer.customer_name || '',
+        phoneNumber: customer.phone_number || '',
+        street: customer.street || '',
+        city: customer.city || '',
+        state: customer.state || '',
+        zipCode: customer.zip_code || '',
+        country: customer.country || '',
+      });
+      setIsEditing(true); // They're editing existing info
+    } else {
+      setIsEditing(false); // They're creating new info
+    }
+  }, [customer]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({
@@ -31,48 +50,27 @@ const PersonalInfoPage = () => {
     setLoading(true);
 
     try {
-      // Using mock API for testing
-      // TODO: Replace with actual API call to backend when ready
-      const data = await mockCreateCustomer(
-        user!.uid,
-        formData.customerName,
-        formData.phoneNumber,
-        formData.street,
-        formData.city,
-        formData.state,
-        formData.zipCode,
-        formData.country
-      );
+      // updateCustomer handles both POST (create) and PUT (update)
+      await updateCustomer({
+        customer_name: formData.customerName,
+        phone_number: formData.phoneNumber,
+        street: formData.street,
+        city: formData.city,
+        state: formData.state,
+        zip_code: formData.zipCode,
+        country: formData.country,
+      });
       
-      // Real API call (commented out for now):
-      // const response = await fetch('http://localhost:5000/api/customer', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     uid: user?.uid,
-      //     customer_name: formData.customerName,
-      //     phone_number: formData.phoneNumber,
-      //     street: formData.street,
-      //     city: formData.city,
-      //     state: formData.state,
-      //     zip_code: formData.zipCode,
-      //     country: formData.country,
-      //   }),
-      // });
-      // if (!response.ok) {
-      //   throw new Error('Failed to save customer info');
-      // }
-      // const data = await response.json();
-      
-      // Update auth context with customer info
-      updateCustomer(data.customer);
-      
-      // Redirect to select store page
-      navigate('/select-store');
-    } catch (err) {
-      setError('Failed to save your information. Please try again.');
+      // If this was first-time setup, redirect to store selection
+      // If editing from account page, stay on account page
+      if (!isEditing) {
+        navigate('/select-store');
+      } else {
+        // Show success message or just stay on page
+        alert('Information updated successfully!');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to save your information. Please try again.');
       console.error('Customer info error:', err);
     } finally {
       setLoading(false);
@@ -83,9 +81,14 @@ const PersonalInfoPage = () => {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8">
       <div className="bg-white rounded-lg shadow-md p-8 w-full max-w-md">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {isEditing ? 'Edit Personal Information' : 'Personal Information'}
+          </h2>
           <p className="text-sm text-gray-600 mt-1">
-            Please complete your profile to continue
+            {isEditing 
+              ? 'Update your profile information' 
+              : 'Please complete your profile to continue'
+            }
           </p>
         </div>
 
@@ -204,7 +207,9 @@ const PersonalInfoPage = () => {
 
           {/* Error Message */}
           {error && (
-            <div className="text-red-500 text-sm text-center">{error}</div>
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
           )}
 
           {/* Submit Button */}
@@ -213,7 +218,7 @@ const PersonalInfoPage = () => {
             disabled={loading}
             className="w-full bg-gray-800 text-white py-3 rounded-md hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Saving...' : 'Continue'}
+            {loading ? 'Saving...' : (isEditing ? 'Update Information' : 'Continue')}
           </button>
         </form>
       </div>
