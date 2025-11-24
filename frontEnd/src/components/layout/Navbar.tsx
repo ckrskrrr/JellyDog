@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import { useStore } from '../../context/StoreContext';
 import logo from '../../assets/jellydog-logo.png';
 import storeIcon from '../../assets/icons/Store.svg';
 import userIcon from '../../assets/icons/User.svg';
@@ -10,6 +12,8 @@ const Navbar = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { getCartCount } = useCart();
+  const { selectedStore } = useStore();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleProfileClick = () => {
     if (isAuthenticated) navigate('/account');
@@ -21,20 +25,42 @@ const Navbar = () => {
     else navigate('/login');
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim() && selectedStore) {
+      // Navigate to home with search query as URL parameter
+      navigate(`/home?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    // Navigate back to home without search
+    navigate('/home');
+  };
+
   return (
     <nav className="w-full h-[100px] bg-white border-b border-gray-200 flex items-center justify-between px-16 lg:px-24">
       {/* Left - Search */}
       <div className="flex-1 flex items-center">
-        <div className="relative w-[280px] lg:w-[320px]">
+        <form onSubmit={handleSearch} className="relative w-[280px] lg:w-[320px]">
           <input
             type="text"
             placeholder="Search a product"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full px-5 py-2.5 pr-10 border border-gray-300 rounded-full text-sm focus:outline-none focus:border-gray-400"
           />
-          <button className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl">
-            ×
-          </button>
-        </div>
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl hover:text-gray-600"
+            >
+              ×
+            </button>
+          )}
+        </form>
       </div>
 
       {/* Center - Logo */}

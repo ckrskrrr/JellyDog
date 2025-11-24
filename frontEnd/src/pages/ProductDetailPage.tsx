@@ -2,21 +2,33 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { useCart } from '../context/CartContext';
-import { MOCK_PRODUCTS, MOCK_INVENTORY } from '../lib/MockProductData';
-import type { ProductWithStock } from '../types/product_types';
+import { useAuth } from '../context/AuthContext';
+
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
+
+interface ProductWithStock {
+  product_id: number;
+  product_name: string;
+  category: string;
+  price: number;
+  img_url: string;
+  stock: number;
+}
 
 const ProductDetailPage = () => {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
   const { selectedStore } = useStore();
   const { addToCart } = useCart();
+  const { isAuthenticated } = useAuth();
 
   const [product, setProduct] = useState<ProductWithStock | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  //use 3 img irl but same pic for the sake of this project
+  // Use 3 images (same image repeated for now)
   const productImages = product ? [product.img_url, product.img_url, product.img_url] : [];
 
   useEffect(() => {
@@ -26,27 +38,25 @@ const ProductDetailPage = () => {
         return;
       }
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      const foundProduct = MOCK_PRODUCTS.find(
-        (p) => p.product_id === parseInt(productId)
-      );
-
-      if (foundProduct) {
-        const inventory = MOCK_INVENTORY.find(
-          (inv) =>
-            inv.store_id === selectedStore.store_id &&
-            inv.product_id === foundProduct.product_id
+      setLoading(true);
+      setError('');
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/products/?store_id=${selectedStore.store_id}&product_id=${productId}`
         );
-
-        setProduct({
-          ...foundProduct,
-          stock: inventory?.stock || 0,
-        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch product');
+        }
+        
+        const productData = await response.json();
+        setProduct(productData);
+      } catch (err: any) {
+        console.error('Error fetching product:', err);
+        setError(err.message || 'Failed to load product');
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     fetchProduct();
@@ -64,11 +74,19 @@ const ProductDetailPage = () => {
     );
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
     if (product && product.stock > 0) {
-      addToCart(product, quantity, product.stock);
-      // Show success feedback or navigate to cart
-      alert(`Added ${quantity} ${product.product_name} to cart!`);
+      try {
+        await addToCart(product.product_id, quantity, product.price);
+        alert(`Added ${quantity} ${product.product_name} to cart!`);
+      } catch (error: any) {
+        alert(error.message || 'Failed to add to cart');
+      }
     }
   };
 
@@ -80,12 +98,12 @@ const ProductDetailPage = () => {
     );
   }
 
-  if (!product) {
+  if (error || !product) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Product not found
+            {error || 'Product not found'}
           </h2>
           <button
             onClick={() => navigate('/home')}

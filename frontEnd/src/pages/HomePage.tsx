@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 
 const API_BASE_URL = 'http://127.0.0.1:5000/api';
@@ -26,6 +26,8 @@ const fixGitHubImageUrl = (url: string): string => {
 const HomePage = () => {
   const navigate = useNavigate();
   const { selectedStore } = useStore();
+  const [searchParams] = useSearchParams();
+  const searchQuery = searchParams.get('search') || '';
   
   const [products, setProducts] = useState<ProductWithStock[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,21 +54,38 @@ const HomePage = () => {
       setLoading(true);
       setError('');
       try {
-        // Fetch products for the selected store
-        const response = await fetch(
-          `${API_BASE_URL}/stores/products?store_id=${selectedStore.store_id}`
-        );
+        let productsData;
         
-        if (!response.ok) {
-          throw new Error('Failed to fetch products');
+        // Use search endpoint if search query exists
+        if (searchQuery.trim()) {
+          const response = await fetch(
+            `${API_BASE_URL}/products/search?store_id=${selectedStore.store_id}&q=${encodeURIComponent(searchQuery)}`
+          );
+          
+          if (!response.ok) {
+            throw new Error('Failed to search products');
+          }
+          
+          productsData = await response.json();
+        } else {
+          // Regular product fetch
+          const response = await fetch(
+            `${API_BASE_URL}/stores/products?store_id=${selectedStore.store_id}`
+          );
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch products');
+          }
+          
+          productsData = await response.json();
         }
         
-        const productsData = await response.json();
-        
-        // Filter by selected categories on the frontend
-        const filteredProducts = selectedCategories.length === 0
-          ? productsData
-          : productsData.filter((p: ProductWithStock) => selectedCategories.includes(p.category));
+        // Filter by selected categories on the frontend (only if not searching)
+        const filteredProducts = searchQuery.trim() 
+          ? productsData // Show all search results regardless of category
+          : selectedCategories.length === 0
+            ? productsData
+            : productsData.filter((p: ProductWithStock) => selectedCategories.includes(p.category));
         
         setProducts(filteredProducts);
       } catch (err: any) {
@@ -78,7 +97,7 @@ const HomePage = () => {
     };
 
     fetchProducts();
-  }, [selectedStore, selectedCategories]);
+  }, [selectedStore, selectedCategories, searchQuery]);
 
   const handleCategoryToggle = (categoryName: string) => {
     setSelectedCategories((prev) => {
@@ -168,9 +187,26 @@ const HomePage = () => {
 
           {/* Main Content - Product Grid */}
           <div className="flex-1">
+            {/* Search Results Header */}
+            {searchQuery && (
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Search results for "{searchQuery}"
+                </h2>
+                <p className="text-gray-600 mt-1">
+                  Found {products.length} {products.length === 1 ? 'product' : 'products'}
+                </p>
+              </div>
+            )}
+            
             {products.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-600">No products found in selected categories.</p>
+                <p className="text-gray-600">
+                  {searchQuery 
+                    ? `No products found matching "${searchQuery}"`
+                    : 'No products found in selected categories.'
+                  }
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-4 gap-6">

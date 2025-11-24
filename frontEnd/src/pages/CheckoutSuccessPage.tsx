@@ -4,14 +4,15 @@ import { useCart } from '../context/CartContext';
 
 const CheckoutSuccessPage = () => {
   const navigate = useNavigate();
-  const { clearCart } = useCart();
-  const hasCleared = useRef(false);
+  const { fetchCart } = useCart();
+  const hasRefreshed = useRef(false);
 
   useEffect(() => {
-    // Clear the cart only once when component mounts
-    if (!hasCleared.current) {
-      clearCart();
-      hasCleared.current = true;
+    // Refresh cart to get the updated state (cart should be empty after checkout)
+    // Only do this once when component mounts
+    if (!hasRefreshed.current) {
+      fetchCart();
+      hasRefreshed.current = true;
     }
   }, []); // Empty dependency array - only run once
 

@@ -1,42 +1,74 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { mockGetOrderDetail, mockReturnItems } from '../lib/MockOrderData';
-import type { Order, OrderItem } from '../types/order_types';
-import type { Product } from '../types/product_types';
+import { useAuth } from '../context/AuthContext';
 
-interface OrderItemWithProduct extends OrderItem {
-  product: Product;
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
+
+interface OrderItem {
+  order_item_id: number;
+  product_id: number;
+  product_name: string;
+  unit_price: number;
+  quantity: number;
+  img_url: string;
+  is_return: number;
+}
+
+interface OrderDetail {
+  order_id: number;
+  order_number: number;
+  order_datetime: string;
+  total_price: number;
+  status: string;
+  store: {
+    store_id: number;
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
+  items: OrderItem[];
 }
 
 const OrderDetailPage = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
+  const { customer } = useAuth();
   
-  const [order, setOrder] = useState<Order | null>(null);
-  const [items, setItems] = useState<OrderItemWithProduct[]>([]);
+  const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [returningItems, setReturningItems] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchOrderDetail = async () => {
-      if (!orderId) return;
+      if (!orderId || !customer) {
+        setLoading(false);
+        return;
+      }
 
       try {
-        const { order: orderData, items: itemsData } = await mockGetOrderDetail(
-          parseInt(orderId)
+        const response = await fetch(
+          `${API_BASE_URL}/orders/${orderId}?customer_id=${customer.customer_id}`
         );
-        setOrder(orderData);
-        setItems(itemsData);
-      } catch (error) {
-        console.error('Error fetching order details:', error);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch order details');
+        }
+
+        const data = await response.json();
+        setOrderDetail(data);
+      } catch (err: any) {
+        console.error('Error fetching order details:', err);
+        setError(err.message || 'Failed to load order details');
       } finally {
         setLoading(false);
       }
     };
 
     fetchOrderDetail();
-  }, [orderId]);
+  }, [orderId, customer]);
 
   const handleItemToggle = (orderItemId: number) => {
     const newSelected = new Set(selectedItems);
@@ -49,35 +81,53 @@ const OrderDetailPage = () => {
   };
 
   const handleReturn = async () => {
-    if (selectedItems.size === 0) return;
+    if (selectedItems.size === 0 || !customer || !orderId) return;
 
     setReturningItems(true);
     try {
-      await mockReturnItems(Array.from(selectedItems));
-      
-      // Update local state to show returned status
-      setItems((prevItems) =>
-        prevItems.map((item) =>
-          selectedItems.has(item.order_item_id)
-            ? { ...item, is_return: true }
-            : item
-        )
+      const response = await fetch(
+        `${API_BASE_URL}/orders/${orderId}/return`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_id: customer.customer_id,
+            order_item_ids: Array.from(selectedItems),
+          }),
+        }
       );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to return items');
+      }
+
+      // Update local state to show returned status
+      if (orderDetail) {
+        setOrderDetail({
+          ...orderDetail,
+          items: orderDetail.items.map((item) =>
+            selectedItems.has(item.order_item_id)
+              ? { ...item, is_return: 1 }
+              : item
+          ),
+        });
+      }
       
       // Clear selection
       setSelectedItems(new Set());
       
       alert('Items marked for return successfully!');
-    } catch (error) {
-      console.error('Error returning items:', error);
-      alert('Failed to return items. Please try again.');
+    } catch (err: any) {
+      console.error('Error returning items:', err);
+      alert(err.message || 'Failed to return items. Please try again.');
     } finally {
       setReturningItems(false);
     }
   };
 
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
+  const formatDate = (datetimeString: string) => {
+    const date = new Date(datetimeString);
     return date.toLocaleDateString('en-US', {
       month: '2-digit',
       day: '2-digit',
@@ -85,8 +135,8 @@ const OrderDetailPage = () => {
     });
   };
 
-  const getStatus = (item: OrderItemWithProduct) => {
-    if (item.is_return) {
+  const getStatus = (item: OrderItem) => {
+    if (item.is_return === 1) {
       return <span className="text-gray-500">Returned</span>;
     }
     return <span className="text-green-600 font-medium">Delivered</span>;
@@ -100,11 +150,13 @@ const OrderDetailPage = () => {
     );
   }
 
-  if (!order) {
+  if (error || !orderDetail) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Order not found</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            {error || 'Order not found'}
+          </h2>
           <button
             onClick={() => navigate('/account')}
             className="text-blue-600 hover:text-blue-700 underline"
@@ -116,7 +168,7 @@ const OrderDetailPage = () => {
     );
   }
 
-  const hasSelectableItems = items.some((item) => !item.is_return);
+  const hasSelectableItems = orderDetail.items.some((item) => item.is_return === 0);
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
@@ -124,14 +176,17 @@ const OrderDetailPage = () => {
         {/* Order Header */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Order #{order.order_number}
+            Order #{orderDetail.order_number}
           </h2>
           <div className="flex gap-8 text-sm text-gray-600">
             <div>
-              <span className="font-medium">Date:</span> {formatDate(order.order_datetime)}
+              <span className="font-medium">Date:</span> {formatDate(orderDetail.order_datetime)}
             </div>
             <div>
-              <span className="font-medium">Total:</span> ${order.total_price.toFixed(2)}
+              <span className="font-medium">Total:</span> ${orderDetail.total_price.toFixed(2)}
+            </div>
+            <div>
+              <span className="font-medium">Store:</span> {orderDetail.store.city}, {orderDetail.store.state}
             </div>
           </div>
         </div>
@@ -162,9 +217,9 @@ const OrderDetailPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {items.map((item) => {
+              {orderDetail.items.map((item) => {
                 const itemTotal = item.unit_price * item.quantity;
-                const isReturned = item.is_return;
+                const isReturned = item.is_return === 1;
 
                 return (
                   <tr key={item.order_item_id} className="hover:bg-gray-50">
@@ -187,17 +242,17 @@ const OrderDetailPage = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
                         <img
-                          src={item.product.img_url}
-                          alt={item.product.product_name}
+                          src={item.img_url}
+                          alt={item.product_name}
                           className="w-12 h-12 object-cover rounded"
                           onError={(e) => {
                             e.currentTarget.src = `https://via.placeholder.com/48x48/cccccc/666666?text=${encodeURIComponent(
-                              item.product.product_name.slice(0, 1)
+                              item.product_name.slice(0, 1)
                             )}`;
                           }}
                         />
                         <span className="text-gray-900 font-medium">
-                          {item.product.product_name}
+                          {item.product_name}
                         </span>
                       </div>
                     </td>

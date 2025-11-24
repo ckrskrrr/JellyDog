@@ -1,15 +1,74 @@
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { useStore } from '../context/StoreContext';
+
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
 const CartPage = () => {
   const navigate = useNavigate();
-  const { items, updateQuantity, removeFromCart, getCartTotal } = useCart();
+  const { items, updateQuantity, removeFromCart, getCartTotal, loading } = useCart();
+  const { customer } = useAuth();
+  const { selectedStore } = useStore();
 
-  const handleCheckout = () => {
-    // TODO: Process order and create order in backend
-    // For now, just clear cart and navigate to success page
-    navigate('/checkout-success');
+  const handleCheckout = async () => {
+    if (!customer || !selectedStore) {
+      alert('Please log in and select a store');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/orders/checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: customer.customer_id,
+          store_id: selectedStore.store_id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Checkout failed');
+      }
+
+      // Navigate to success page
+      navigate('/checkout-success');
+    } catch (error: any) {
+      console.error('Checkout error:', error);
+      alert(error.message || 'Failed to complete checkout');
+    }
   };
+
+  const handleUpdateQuantity = async (orderItemId: number, newQuantity: number, currentStock?: number) => {
+    // Validate against stock if available
+    if (currentStock !== undefined && newQuantity > currentStock) {
+      alert(`Cannot add more than ${currentStock} items (current stock limit)`);
+      return;
+    }
+
+    try {
+      await updateQuantity(orderItemId, newQuantity);
+    } catch (error: any) {
+      alert(error.message || 'Failed to update quantity');
+    }
+  };
+
+  const handleRemove = async (orderItemId: number) => {
+    try {
+      await removeFromCart(orderItemId);
+    } catch (error: any) {
+      alert(error.message || 'Failed to remove item');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">Loading cart...</div>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -60,19 +119,16 @@ const CartPage = () => {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {items.map((item) => {
-                const itemTotal = item.product.price * item.quantity;
+                const itemTotal = item.unit_price * item.quantity;
 
                 return (
-                  <tr key={item.product.product_id} className="hover:bg-gray-50">
+                  <tr key={item.order_item_id} className="hover:bg-gray-50">
                     {/* Quantity Controls */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() =>
-                            updateQuantity(
-                              item.product.product_id,
-                              item.quantity - 1
-                            )
+                            handleUpdateQuantity(item.order_item_id, item.quantity - 1, item.stock)
                           }
                           className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition-colors"
                           aria-label="Decrease quantity"
@@ -84,43 +140,40 @@ const CartPage = () => {
                         </span>
                         <button
                           onClick={() =>
-                            updateQuantity(
-                              item.product.product_id,
-                              item.quantity + 1
-                            )
+                            handleUpdateQuantity(item.order_item_id, item.quantity + 1, item.stock)
                           }
-                          disabled={item.quantity >= item.stock}
+                          disabled={item.stock !== undefined && item.quantity >= item.stock}
                           className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           aria-label="Increase quantity"
+                          title={item.stock !== undefined && item.quantity >= item.stock ? `Only ${item.stock} available in stock` : ''}
                         >
                           <span className="text-gray-600 text-lg">+</span>
                         </button>
                       </div>
                     </td>
 
-                    {/* Item Name */}
+                    {/* Item Name with Image */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
-                        {/* Optional: Product Image */}
                         <img
-                          src={item.product.img_url}
-                          alt={item.product.product_name}
+                          src={item.img_url}
+                          alt={item.product_name}
                           className="w-16 h-16 object-cover rounded"
                           onError={(e) => {
                             e.currentTarget.src = `https://via.placeholder.com/64x64/cccccc/666666?text=${encodeURIComponent(
-                              item.product.product_name.slice(0, 1)
+                              item.product_name.slice(0, 1)
                             )}`;
                           }}
                         />
                         <span className="text-gray-900 font-medium">
-                          {item.product.product_name}
+                          {item.product_name}
                         </span>
                       </div>
                     </td>
 
                     {/* Unit Price */}
                     <td className="px-6 py-4 text-gray-900">
-                      ${item.product.price.toFixed(2)}
+                      ${item.unit_price.toFixed(2)}
                     </td>
 
                     {/* Total */}
@@ -131,7 +184,7 @@ const CartPage = () => {
                     {/* Remove Button */}
                     <td className="px-6 py-4">
                       <button
-                        onClick={() => removeFromCart(item.product.product_id)}
+                        onClick={() => handleRemove(item.order_item_id)}
                         className="text-red-600 hover:text-red-700 text-sm font-medium"
                       >
                         Remove
