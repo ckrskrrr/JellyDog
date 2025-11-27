@@ -3,13 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import OrderHistoryPage from './OrderHistoryPage';
 import PersonalInfoPage from './PersonalInfoPage';
+import AdminAnalyticsPage from './AdminAnalyticsPage';
 
-type TabType = 'orders' | 'info';
+type CustomerTabType = 'orders' | 'info';
+type AdminTabType = 'analytics';
 
 const UserPage = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('orders');
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
+  
+  // Separate state for customer and admin tabs
+  const [customerTab, setCustomerTab] = useState<CustomerTabType>('orders');
+  const [adminTab, setAdminTab] = useState<AdminTabType>('analytics');
 
   const handleLogout = () => {
     logout();
@@ -22,26 +27,47 @@ const UserPage = () => {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-6 py-4">
           <div className="flex gap-8 justify-center">
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`pb-2 px-1 font-medium transition-colors ${
-                activeTab === 'orders'
-                  ? 'text-gray-900 border-b-2 border-gray-900'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Orders
-            </button>
-            <button
-              onClick={() => setActiveTab('info')}
-              className={`pb-2 px-1 font-medium transition-colors ${
-                activeTab === 'info'
-                  ? 'text-gray-900 border-b-2 border-gray-900'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Info
-            </button>
+            {/* Customer Tabs */}
+            {!isAdmin && (
+              <>
+                <button
+                  onClick={() => setCustomerTab('orders')}
+                  className={`pb-2 px-1 font-medium transition-colors ${
+                    customerTab === 'orders'
+                      ? 'text-gray-900 border-b-2 border-gray-900'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Orders
+                </button>
+                <button
+                  onClick={() => setCustomerTab('info')}
+                  className={`pb-2 px-1 font-medium transition-colors ${
+                    customerTab === 'info'
+                      ? 'text-gray-900 border-b-2 border-gray-900'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Info
+                </button>
+              </>
+            )}
+
+            {/* Admin Tabs */}
+            {isAdmin && (
+              <button
+                onClick={() => setAdminTab('analytics')}
+                className={`pb-2 px-1 font-medium transition-colors ${
+                  adminTab === 'analytics'
+                    ? 'text-gray-900 border-b-2 border-gray-900'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Analytics
+              </button>
+            )}
+
+            {/* Logout - shown for both */}
             <button
               onClick={handleLogout}
               className="pb-2 px-1 font-medium text-gray-500 hover:text-gray-700 transition-colors"
@@ -54,8 +80,20 @@ const UserPage = () => {
 
       {/* Content Area */}
       <div className="max-w-4xl mx-auto px-6 py-8">
-        {activeTab === 'orders' && <OrderHistoryPage />}
-        {activeTab === 'info' && <PersonalInfoPage />}
+        {/* Customer Content */}
+        {!isAdmin && (
+          <>
+            {customerTab === 'orders' && <OrderHistoryPage />}
+            {customerTab === 'info' && <PersonalInfoPage />}
+          </>
+        )}
+
+        {/* Admin Content */}
+        {isAdmin && (
+          <>
+            {adminTab === 'analytics' && <AdminAnalyticsPage />}
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
+import { useAuth } from '../context/AuthContext';
 
 const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
@@ -26,6 +27,7 @@ const fixGitHubImageUrl = (url: string): string => {
 const HomePage = () => {
   const navigate = useNavigate();
   const { selectedStore } = useStore();
+  const { isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('search') || '';
   
@@ -111,6 +113,41 @@ const HomePage = () => {
 
   const handleProductClick = (productId: number) => {
     navigate(`/product/${productId}`);
+  };
+
+  const handleStockAdjustment = async (productId: number, adjustment: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent navigating to product detail
+    
+    if (!selectedStore) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/inventory/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          store_id: selectedStore.store_id,
+          product_id: productId,
+          adjustment: adjustment,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to adjust stock');
+      }
+
+      const data = await response.json();
+      
+      // Update local state with new stock
+      setProducts((prevProducts) =>
+        prevProducts.map((p) =>
+          p.product_id === productId ? { ...p, stock: data.new_stock } : p
+        )
+      );
+    } catch (err: any) {
+      console.error('Error adjusting stock:', err);
+      alert(err.message || 'Failed to adjust stock');
+    }
   };
 
   // If no store selected, show message
@@ -257,7 +294,36 @@ const HomePage = () => {
                         }`}>
                           ${product.price.toFixed(2)}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">Body text.</p>
+                        
+                        {/* Admin Stock Controls */}
+                        {isAdmin && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600">
+                                Stock: <span className="font-semibold text-gray-900">{product.stock}</span>
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => handleStockAdjustment(product.product_id, -1, e)}
+                                  disabled={product.stock === 0}
+                                  className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Decrease stock by 1"
+                                >
+                                  −
+                                </button>
+                                <button
+                                  onClick={(e) => handleStockAdjustment(product.product_id, 1, e)}
+                                  className="w-7 h-7 rounded-full bg-green-500 text-white flex items-center justify-center hover:bg-green-600 transition-colors"
+                                  title="Increase stock by 1"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {!isAdmin && <p className="text-xs text-gray-500 mt-1">Body text.</p>}
                       </div>
                     </div>
                   );
