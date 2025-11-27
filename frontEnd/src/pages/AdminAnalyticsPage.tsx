@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
@@ -11,16 +12,26 @@ interface TopSeller {
   total_sold: number;
 }
 
-interface BestRegion {
-  state: string | null;
-  city: string | null;
+interface StorePerformance {
+  store_id: number;
+  state: string;
+  city: string;
   order_count: number;
   total_revenue: number;
 }
 
+interface Overview {
+  total_revenue: number;
+  total_orders: number;
+  total_products_sold: number;
+}
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
 const AdminAnalyticsPage = () => {
   const [topSellers, setTopSellers] = useState<TopSeller[]>([]);
-  const [bestRegion, setBestRegion] = useState<BestRegion | null>(null);
+  const [storePerformance, setStorePerformance] = useState<StorePerformance[]>([]);
+  const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -33,11 +44,17 @@ const AdminAnalyticsPage = () => {
         const topSellersData = await topSellersResponse.json();
         setTopSellers(topSellersData);
 
-        // Fetch best region
-        const bestRegionResponse = await fetch(`${API_BASE_URL}/stats/best-region`);
-        if (!bestRegionResponse.ok) throw new Error('Failed to fetch best region');
-        const bestRegionData = await bestRegionResponse.json();
-        setBestRegion(bestRegionData);
+        // Fetch store performance
+        const storePerformanceResponse = await fetch(`${API_BASE_URL}/stats/best-region`);
+        if (!storePerformanceResponse.ok) throw new Error('Failed to fetch store performance');
+        const storePerformanceData = await storePerformanceResponse.json();
+        setStorePerformance(storePerformanceData);
+
+        // Fetch overview
+        const overviewResponse = await fetch(`${API_BASE_URL}/stats/overview`);
+        if (!overviewResponse.ok) throw new Error('Failed to fetch overview');
+        const overviewData = await overviewResponse.json();
+        setOverview(overviewData);
       } catch (err: any) {
         console.error('Error fetching analytics:', err);
         setError(err.message || 'Failed to load analytics');
@@ -73,35 +90,132 @@ const AdminAnalyticsPage = () => {
     );
   }
 
+  // Prepare data for charts
+  const storeRevenueData = storePerformance.map(store => ({
+    name: `${store.city}, ${store.state}`,
+    revenue: store.total_revenue,
+    orders: store.order_count,
+  }));
+
+  const categoryData = topSellers.reduce((acc, product) => {
+    const existing = acc.find(item => item.name === product.category);
+    if (existing) {
+      existing.value += product.total_sold;
+    } else {
+      acc.push({ name: product.category, value: product.total_sold });
+    }
+    return acc;
+  }, [] as { name: string; value: number }[]);
+
   return (
     <div className="space-y-8">
-      {/* Best Region Card */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Best Performing Store</h2>
-        {bestRegion && bestRegion.city ? (
-          <div className="grid grid-cols-3 gap-6">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Location</p>
-              <p className="text-xl font-bold text-gray-900">
-                {bestRegion.city}, {bestRegion.state}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
-              <p className="text-xl font-bold text-green-600">
-                ${bestRegion.total_revenue.toFixed(2)}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Orders</p>
-              <p className="text-xl font-bold text-gray-900">
-                {bestRegion.order_count}
-              </p>
-            </div>
+      {/* Overview Cards */}
+      {overview && (
+        <div className="grid grid-cols-3 gap-6">
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <p className="text-sm text-gray-600 mb-2">Total Revenue</p>
+            <p className="text-3xl font-bold text-green-600">
+              ${overview.total_revenue.toFixed(2)}
+            </p>
           </div>
-        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <p className="text-sm text-gray-600 mb-2">Total Orders</p>
+            <p className="text-3xl font-bold text-blue-600">
+              {overview.total_orders}
+            </p>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <p className="text-sm text-gray-600 mb-2">Products Sold</p>
+            <p className="text-3xl font-bold text-purple-600">
+              {overview.total_products_sold}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Store Performance Bar Chart */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Store Performance</h2>
+        {storePerformance.length === 0 ? (
           <p className="text-gray-600">No sales data available yet.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={storeRevenueData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis yAxisId="left" orientation="left" stroke="#10b981" />
+              <YAxis yAxisId="right" orientation="right" stroke="#3b82f6" />
+              <Tooltip />
+              <Legend />
+              <Bar yAxisId="left" dataKey="revenue" fill="#10b981" name="Revenue ($)" />
+              <Bar yAxisId="right" dataKey="orders" fill="#3b82f6" name="Orders" />
+            </BarChart>
+          </ResponsiveContainer>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-6">
+        {/* Sales by Category Pie Chart */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Sales by Category</h2>
+          {categoryData.length === 0 ? (
+            <p className="text-gray-600">No sales data available yet.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={categoryData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {categoryData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Store Performance Table */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Store Details</h2>
+          {storePerformance.length === 0 ? (
+            <p className="text-gray-600">No sales data available yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {storePerformance.map((store, index) => (
+                <div key={store.store_id} className="border-b border-gray-200 pb-3 last:border-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-bold text-gray-900">
+                      Store {index + 1}: {store.city}, {store.state}
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Revenue:</span>{' '}
+                      <span className="font-semibold text-green-600">
+                        ${store.total_revenue.toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Orders:</span>{' '}
+                      <span className="font-semibold text-blue-600">
+                        {store.order_count}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Top Sellers Table */}

@@ -1,25 +1,3 @@
-'''
-from flask import Blueprint, request, jsonify
-
-bp = Blueprint("stats", __name__)
-
-@bp.get("/top-sellers")
-def top_sellers():
-    """Return top N products by units sold; query param: limit (default 10)."""
-    ...
-
-@bp.get("/best-region")
-def best_region():
-    """Return region/state with highest sales (simple aggregation)."""
-    ...
-
-@bp.get("/revenue/daily")
-def revenue_daily():
-    """Return daily revenue between date_start and date_end (inclusive)."""
-    ...
-
-'''
-
 from flask import Blueprint, request, jsonify
 from ..db import get_db
 import sqlite3
@@ -117,9 +95,9 @@ def best_region():
     """
     GET /api/stats/best-region
     
-    Returns the state/region with the highest total sales.
+    Returns performance stats for all stores.
     
-    Returns: { state, city, total_revenue, order_count }
+    Returns: [{ store_id, state, city, total_revenue, order_count }]
     """
     try:
         conn = get_db()
@@ -128,35 +106,80 @@ def best_region():
         cur.execute(
             """
             SELECT 
+                s.store_id,
                 s.state,
                 s.city,
                 COUNT(DISTINCT o.order_id) as order_count,
                 SUM(o.total_price) as total_revenue
-            FROM "order" AS o
-            JOIN store AS s
+            FROM store AS s
+            LEFT JOIN "order" AS o
               ON o.store_id = s.store_id
-            WHERE o.status = 'complete'
-            GROUP BY s.state, s.city
-            ORDER BY total_revenue DESC
-            LIMIT 1;
+             AND o.status = 'complete'
+            GROUP BY s.store_id, s.state, s.city
+            ORDER BY total_revenue DESC;
+            """
+        )
+        
+        rows = cur.fetchall()
+        
+        if not rows:
+            return jsonify([]), 200
+        
+        results = [
+            {
+                "store_id": row["store_id"],
+                "state": row["state"],
+                "city": row["city"],
+                "order_count": row["order_count"],
+                "total_revenue": float(row["total_revenue"]) if row["total_revenue"] else 0,
+            }
+            for row in rows
+        ]
+        
+        return jsonify(results), 200
+        
+    except sqlite3.Error as e:
+        return bad_request(f"database error: {e}")
+
+
+# -------------------------------------------------
+# GET /api/stats/revenue/daily?date_start=YYYY-MM-DD&date_end=YYYY-MM-DD
+# Returns daily revenue between dates
+# -------------------------------------------------
+
+@bp.get("/overview")
+def overview():
+    """
+    GET /api/stats/overview
+    
+    Returns overall sales statistics.
+    
+    Returns: { total_revenue, total_orders, total_products_sold }
+    """
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        
+        cur.execute(
+            """
+            SELECT 
+                COUNT(DISTINCT o.order_id) as total_orders,
+                COALESCE(SUM(o.total_price), 0) as total_revenue,
+                COALESCE(SUM(oi.quantity), 0) as total_products_sold
+            FROM "order" AS o
+            LEFT JOIN order_item AS oi
+              ON o.order_id = oi.order_id
+             AND oi.is_return = 0
+            WHERE o.status = 'complete';
             """
         )
         
         row = cur.fetchone()
         
-        if row is None:
-            return jsonify({
-                "state": None,
-                "city": None,
-                "total_revenue": 0,
-                "order_count": 0,
-            }), 200
-        
         result = {
-            "state": row["state"],
-            "city": row["city"],
-            "order_count": row["order_count"],
-            "total_revenue": float(row["total_revenue"]) if row["total_revenue"] else 0,
+            "total_revenue": float(row["total_revenue"]) if row["total_revenue"] else 0.0,
+            "total_orders": row["total_orders"] or 0,
+            "total_products_sold": row["total_products_sold"] or 0,
         }
         
         return jsonify(result), 200
