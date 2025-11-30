@@ -3,6 +3,17 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
+const getStatusClasses = (status: string) => {
+  switch (status) {
+    case 'complete':
+      return 'bg-green-100 text-green-800';
+    case 'in cart':
+      return 'bg-yellow-100 text-yellow-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
 interface TopSeller {
   product_id: number;
   product_name: string;
@@ -34,6 +45,7 @@ interface ReturnRate {
   top_returned_products: {
     product_id: number;
     product_name: string;
+    category: string;
     img_url: string;
     total_sold: number;
     total_returned: number;
@@ -57,7 +69,20 @@ interface InventoryItem {
   stock: number;
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+interface Order {
+  order_id: number;
+  order_number: number;
+  order_datetime: string;
+  total_price: number;
+  status: string;
+  customer_name: string;
+  user_name: string;
+  store_id: number;
+  city: string;
+  state: string;
+}
+
+const COLORS = ['#6eed37', '#0099ff', '#fdaa2e', '#FF8042', '#716be6'];
 
 const AdminAnalyticsPage = () => {
   const [topSellers, setTopSellers] = useState<TopSeller[]>([]);
@@ -65,31 +90,38 @@ const AdminAnalyticsPage = () => {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [returnRate, setReturnRate] = useState<ReturnRate | null>(null);
   const [inventoryHealth, setInventoryHealth] = useState<InventoryHealth | null>(null);
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Collapsible sections state
+  const [showInventoryDetails, setShowInventoryDetails] = useState(false);
+  const [showAllOrders, setShowAllOrders] = useState(false);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
         // Fetch all analytics data
-        const [topSellersRes, storePerformanceRes, overviewRes, returnRateRes, inventoryRes] = await Promise.all([
+        const [topSellersRes, storePerformanceRes, overviewRes, returnRateRes, inventoryRes, ordersRes] = await Promise.all([
           fetch(`${API_BASE_URL}/stats/top-sellers?limit=5`),
           fetch(`${API_BASE_URL}/stats/best-region`),
           fetch(`${API_BASE_URL}/stats/overview`),
           fetch(`${API_BASE_URL}/stats/return-rate`),
           fetch(`${API_BASE_URL}/stats/inventory-health`),
+          fetch(`${API_BASE_URL}/stats/all-orders`),
         ]);
 
-        if (!topSellersRes.ok || !storePerformanceRes.ok || !overviewRes.ok || !returnRateRes.ok || !inventoryRes.ok) {
+        if (!topSellersRes.ok || !storePerformanceRes.ok || !overviewRes.ok || !returnRateRes.ok || !inventoryRes.ok || !ordersRes.ok) {
           throw new Error('Failed to fetch analytics');
         }
 
-        const [topSellersData, storePerformanceData, overviewData, returnRateData, inventoryData] = await Promise.all([
+        const [topSellersData, storePerformanceData, overviewData, returnRateData, inventoryData, ordersData] = await Promise.all([
           topSellersRes.json(),
           storePerformanceRes.json(),
           overviewRes.json(),
           returnRateRes.json(),
           inventoryRes.json(),
+          ordersRes.json(),
         ]);
 
         setTopSellers(topSellersData);
@@ -97,6 +129,7 @@ const AdminAnalyticsPage = () => {
         setOverview(overviewData);
         setReturnRate(returnRateData);
         setInventoryHealth(inventoryData);
+        setAllOrders(ordersData);
       } catch (err: any) {
         console.error('Error fetching analytics:', err);
         setError(err.message || 'Failed to load analytics');
@@ -107,6 +140,17 @@ const AdminAnalyticsPage = () => {
 
     fetchAnalytics();
   }, []);
+
+  const formatDate = (datetime: string) => {
+    const date = new Date(datetime);
+    return date.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
   if (loading) {
     return (
@@ -153,52 +197,154 @@ const AdminAnalyticsPage = () => {
     <div className="space-y-8 max-w-[1600px]">
       {/* Overview Cards */}
       {overview && (
-        <div className="grid grid-cols-3 gap-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <p className="text-sm text-gray-600 mb-2">Total Revenue</p>
-            <p className="text-3xl font-bold text-green-600">
-              ${overview.total_revenue.toFixed(2)}
-            </p>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <p className="text-sm text-gray-600 mb-2">Total Orders</p>
-            <p className="text-3xl font-bold text-blue-600">
-              {overview.total_orders}
-            </p>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <p className="text-sm text-gray-600 mb-2">Products Sold</p>
-            <p className="text-3xl font-bold text-purple-600">
-              {overview.total_products_sold}
-            </p>
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Overview</h2>
+          <div className="grid grid-cols-3 gap-6">
+            <div className="border border-gray-200 rounded-lg p-6">
+              <p className="text-sm text-gray-600 mb-2">Total Revenue</p>
+              <p className="text-3xl font-bold" style={{ color: '#6eed37' }}>
+                ${overview.total_revenue.toFixed(2)}
+              </p>
+            </div>
+            <div className="border border-gray-200 rounded-lg p-6">
+              <p className="text-sm text-gray-600 mb-2">Total Orders</p>
+              <p className="text-3xl font-bold" style={{ color: '#0099ff' }}>
+                {overview.total_orders}
+              </p>
+            </div>
+            <div className="border border-gray-200 rounded-lg p-6">
+              <p className="text-sm text-gray-600 mb-2">Products Sold</p>
+              <p className="text-3xl font-bold" style={{ color: '#716be6' }}>
+                {overview.total_products_sold}
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Return Rate Cards */}
+      {/* Return Rate Section */}
       {returnRate && (
-        <div className="grid grid-cols-3 gap-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <p className="text-sm text-gray-600 mb-2">Return Rate</p>
-            <p className="text-3xl font-bold text-red-600">
-              {returnRate.return_rate_percent}%
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              {returnRate.total_items_returned} of {returnRate.total_items_sold} items
-            </p>
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Return Analytics</h2>
+          
+          <div className="grid grid-cols-3 gap-6">
+            <div className="border border-gray-200 rounded-lg p-6">
+              <p className="text-sm text-gray-600 mb-2">Return Rate</p>
+              <p className="text-3xl font-bold text-red-600">
+                {returnRate.return_rate_percent}%
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {returnRate.total_items_returned} of {returnRate.total_items_sold} items
+              </p>
+            </div>
+            <div className="border border-gray-200 rounded-lg p-6">
+              <p className="text-sm text-gray-600 mb-2">Revenue Lost to Returns</p>
+              <p className="text-3xl font-bold text-red-600">
+                ${returnRate.revenue_lost.toFixed(2)}
+              </p>
+            </div>
+            <div className="border border-gray-200 rounded-lg p-6">
+              <p className="text-sm text-gray-600 mb-2">Items Returned</p>
+              <p className="text-3xl font-bold" style={{ color: '#fdaa2e' }}>
+                {returnRate.total_items_returned}
+              </p>
+            </div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <p className="text-sm text-gray-600 mb-2">Revenue Lost to Returns</p>
-            <p className="text-3xl font-bold text-red-600">
-              ${returnRate.revenue_lost.toFixed(2)}
-            </p>
+        </div>
+      )}
+
+      {/* Inventory Health Section */}
+      {inventoryHealth && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Inventory Health</h2>
+            <button
+              onClick={() => setShowInventoryDetails(!showInventoryDetails)}
+              className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors"
+            >
+              {showInventoryDetails ? 'Hide Details' : 'See Details'}
+            </button>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <p className="text-sm text-gray-600 mb-2">Items Returned</p>
-            <p className="text-3xl font-bold text-orange-600">
-              {returnRate.total_items_returned}
-            </p>
+
+          <div className="grid grid-cols-3 gap-6">
+            <div className="border border-red-200 rounded-lg p-6">
+              <p className="text-sm text-gray-600 mb-2">Out of Stock</p>
+              <p className="text-3xl font-bold text-red-600">
+                {inventoryHealth.out_of_stock.length}
+              </p>
+            </div>
+            <div className="border border-yellow-200 rounded-lg p-6">
+              <p className="text-sm text-gray-600 mb-2">Low Stock (&lt; 5)</p>
+              <p className="text-3xl font-bold text-yellow-600">
+                {inventoryHealth.low_stock.length}
+              </p>
+            </div>
+            <div className="border border-blue-200 rounded-lg p-6">
+              <p className="text-sm text-gray-600 mb-2">Overstocked (&gt; 50)</p>
+              <p className="text-3xl font-bold" style={{ color: '#0099ff' }}>
+                {inventoryHealth.overstocked.length}
+              </p>
+            </div>
           </div>
+
+          {/* Inventory Details - Collapsible */}
+          {showInventoryDetails && (
+            <div className="mt-6 pt-6 border-t border-gray-200 grid grid-cols-3 gap-6">
+              {/* Out of Stock */}
+              <div>
+                <h3 className="text-lg font-bold text-red-600 mb-4">Out of Stock</h3>
+                {inventoryHealth.out_of_stock.length === 0 ? (
+                  <p className="text-gray-600 text-sm">No products out of stock</p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {inventoryHealth.out_of_stock.map((item) => (
+                      <div key={`${item.store_id}-${item.product_id}`} className="border-b border-gray-200 pb-2 last:border-0">
+                        <p className="font-semibold text-sm text-gray-900">{item.product_name}</p>
+                        <p className="text-xs text-gray-600">{item.city}, {item.state}</p>
+                        <p className="text-xs text-red-600 font-bold">Stock: 0</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Low Stock */}
+              <div>
+                <h3 className="text-lg font-bold text-yellow-600 mb-4">Low Stock</h3>
+                {inventoryHealth.low_stock.length === 0 ? (
+                  <p className="text-gray-600 text-sm">No low stock items</p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {inventoryHealth.low_stock.map((item) => (
+                      <div key={`${item.store_id}-${item.product_id}`} className="border-b border-gray-200 pb-2 last:border-0">
+                        <p className="font-semibold text-sm text-gray-900">{item.product_name}</p>
+                        <p className="text-xs text-gray-600">{item.city}, {item.state}</p>
+                        <p className="text-xs text-yellow-600 font-bold">Stock: {item.stock}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Overstocked */}
+              <div>
+                <h3 className="text-lg font-bold" style={{ color: '#0099ff' }}>Overstocked</h3>
+                {inventoryHealth.overstocked.length === 0 ? (
+                  <p className="text-gray-600 text-sm">No overstocked items</p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {inventoryHealth.overstocked.map((item) => (
+                      <div key={`${item.store_id}-${item.product_id}`} className="border-b border-gray-200 pb-2 last:border-0">
+                        <p className="font-semibold text-sm text-gray-900">{item.product_name}</p>
+                        <p className="text-xs text-gray-600">{item.city}, {item.state}</p>
+                        <p className="text-xs font-bold" style={{ color: '#0099ff' }}>Stock: {item.stock}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -212,12 +358,12 @@ const AdminAnalyticsPage = () => {
             <BarChart data={storeRevenueData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
-              <YAxis yAxisId="left" orientation="left" stroke="#10b981" />
-              <YAxis yAxisId="right" orientation="right" stroke="#3b82f6" />
+              <YAxis yAxisId="left" orientation="left" stroke="#000000" />
+              <YAxis yAxisId="right" orientation="right" stroke="#000000" />
               <Tooltip />
               <Legend />
-              <Bar yAxisId="left" dataKey="revenue" fill="#10b981" name="Revenue ($)" />
-              <Bar yAxisId="right" dataKey="orders" fill="#3b82f6" name="Orders" />
+              <Bar yAxisId="right" dataKey="orders" fill="#fdaa2e" name="Orders" />
+              <Bar yAxisId="left" dataKey="revenue" fill="#309de7" name="Revenue ($)" />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -239,7 +385,7 @@ const AdminAnalyticsPage = () => {
                   labelLine={false}
                   label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                   outerRadius={80}
-                  fill="#8884d8"
+                  fill="#716be6"
                   dataKey="value"
                 >
                   {categoryData.map((entry, index) => (
@@ -263,19 +409,19 @@ const AdminAnalyticsPage = () => {
                 <div key={store.store_id} className="border-b border-gray-200 pb-3 last:border-0">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold text-gray-900">
-                      Store {index + 1}: {store.city}, {store.state}
+                      #{index + 1}: {store.city}, {store.state}
                     </h3>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-gray-600">Revenue:</span>{' '}
-                      <span className="font-semibold text-green-600">
+                      <span className="font-semibold" style={{ color: '#6eed37' }}>
                         ${store.total_revenue.toFixed(2)}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-600">Orders:</span>{' '}
-                      <span className="font-semibold text-blue-600">
+                      <span className="font-semibold" style={{ color: '#0099ff' }}>
                         {store.order_count}
                       </span>
                     </div>
@@ -287,111 +433,77 @@ const AdminAnalyticsPage = () => {
         </div>
       </div>
 
-      {/* Products with Highest Return Rates */}
-      {returnRate && returnRate.top_returned_products.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Products with Highest Return Rates</h2>
-          <div className="grid grid-cols-5 gap-6">
-            {returnRate.top_returned_products.map((product) => (
-              <div key={product.product_id} className="border border-gray-200 rounded-lg p-5 hover:shadow-lg transition-shadow">
-                <img
-                  src={product.img_url}
-                  alt={product.product_name}
-                  className="w-full h-48 object-cover rounded mb-4"
-                  onError={(e) => {
-                    e.currentTarget.src = `https://via.placeholder.com/200x200/cccccc/666666?text=${encodeURIComponent(
-                      product.product_name.slice(0, 1)
-                    )}`;
-                  }}
-                />
-                <h3 className="font-semibold text-gray-900 text-base mb-3 line-clamp-2">
-                  {product.product_name}
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Return Rate:</span>
-                    <span className="font-bold text-red-600 text-lg">{product.return_rate}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Sold:</span>
-                    <span className="font-semibold">{product.total_sold}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Returned:</span>
-                    <span className="text-red-600 font-semibold">{product.total_returned}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* All Orders Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Order Management</h2>
+          <button
+            onClick={() => setShowAllOrders(!showAllOrders)}
+            className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors"
+          >
+            {showAllOrders ? 'Hide Orders' : 'See All Orders'}
+          </button>
         </div>
-      )}
 
-      {/* Inventory Health */}
-      {inventoryHealth && (
-        <div className="grid grid-cols-3 gap-6">
-          {/* Out of Stock */}
-          <div className="bg-white rounded-lg border border-red-200 p-6">
-            <h3 className="text-lg font-bold text-red-600 mb-4">
-              Out of Stock ({inventoryHealth.out_of_stock.length})
-            </h3>
-            {inventoryHealth.out_of_stock.length === 0 ? (
-              <p className="text-gray-600 text-sm">No products out of stock</p>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {inventoryHealth.out_of_stock.map((item) => (
-                  <div key={`${item.store_id}-${item.product_id}`} className="border-b border-gray-200 pb-2 last:border-0">
-                    <p className="font-semibold text-sm text-gray-900">{item.product_name}</p>
-                    <p className="text-xs text-gray-600">{item.city}, {item.state}</p>
-                    <p className="text-xs text-red-600 font-bold">Stock: 0</p>
-                  </div>
+        {!showAllOrders ? (
+          <p className="text-gray-600">Click "See All Orders" to view all customer orders</p>
+        ) : allOrders.length === 0 ? (
+          <p className="text-gray-600">No orders found</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Order #</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Customer</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Username</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Store</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Date/Time</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Total</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {allOrders.map((order) => (
+                  <tr key={order.order_id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      #{order.order_number}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {order.customer_name}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {order.user_name}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {order.city}, {order.state}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {formatDate(order.order_datetime)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: '#6eed37' }}>
+                      ${order.total_price.toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusClasses(order.status)}`}
+                      >
+                        {order.status}
+                      </span>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
+        )}
+      </div>
+      
+      
 
-          {/* Low Stock */}
-          <div className="bg-white rounded-lg border border-yellow-200 p-6">
-            <h3 className="text-lg font-bold text-yellow-600 mb-4">
-              Low Stock &lt; 5 ({inventoryHealth.low_stock.length})
-            </h3>
-            {inventoryHealth.low_stock.length === 0 ? (
-              <p className="text-gray-600 text-sm">No low stock items</p>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {inventoryHealth.low_stock.map((item) => (
-                  <div key={`${item.store_id}-${item.product_id}`} className="border-b border-gray-200 pb-2 last:border-0">
-                    <p className="font-semibold text-sm text-gray-900">{item.product_name}</p>
-                    <p className="text-xs text-gray-600">{item.city}, {item.state}</p>
-                    <p className="text-xs text-yellow-600 font-bold">Stock: {item.stock}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Overstocked */}
-          <div className="bg-white rounded-lg border border-blue-200 p-6">
-            <h3 className="text-lg font-bold text-blue-600 mb-4">
-              Overstocked &gt; 50 ({inventoryHealth.overstocked.length})
-            </h3>
-            {inventoryHealth.overstocked.length === 0 ? (
-              <p className="text-gray-600 text-sm">No overstocked items</p>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {inventoryHealth.overstocked.map((item) => (
-                  <div key={`${item.store_id}-${item.product_id}`} className="border-b border-gray-200 pb-2 last:border-0">
-                    <p className="font-semibold text-sm text-gray-900">{item.product_name}</p>
-                    <p className="text-xs text-gray-600">{item.city}, {item.state}</p>
-                    <p className="text-xs text-blue-600 font-bold">Stock: {item.stock}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
+      
+     
+    
       {/* Top Sellers Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200">
@@ -406,30 +518,18 @@ const AdminAnalyticsPage = () => {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                  Rank
-                </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                  Product
-                </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                  Category
-                </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                  Price
-                </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                  Units Sold
-                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Rank</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Product</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Category</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Price</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Units Sold</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {topSellers.map((product, index) => (
                 <tr key={product.product_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
-                    <span className="text-2xl font-bold text-gray-400">
-                      #{index + 1}
-                    </span>
+                    <span className="text-2xl font-bold text-gray-400">#{index + 1}</span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -443,21 +543,13 @@ const AdminAnalyticsPage = () => {
                           )}`;
                         }}
                       />
-                      <span className="font-medium text-gray-900">
-                        {product.product_name}
-                      </span>
+                      <span className="font-medium text-gray-900">{product.product_name}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-gray-600">
-                    {product.category}
-                  </td>
-                  <td className="px-6 py-4 text-gray-900">
-                    ${product.price.toFixed(2)}
-                  </td>
+                  <td className="px-6 py-4 text-gray-600">{product.category}</td>
+                  <td className="px-6 py-4 text-gray-900">${product.price.toFixed(2)}</td>
                   <td className="px-6 py-4">
-                    <span className="font-bold text-green-600">
-                      {product.total_sold} units
-                    </span>
+                    <span className="font-bold" style={{ color: '#6eed37' }}>{product.total_sold} units</span>
                   </td>
                 </tr>
               ))}

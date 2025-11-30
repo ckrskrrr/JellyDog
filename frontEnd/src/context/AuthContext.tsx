@@ -5,6 +5,7 @@ import type { User, Customer, AuthState } from '../types/user_types';
 const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
 interface AuthContextType extends AuthState {
+  loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   signup: (username: string, password: string) => Promise<void>;
   logout: () => void;
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchCustomerInfo = async (uid: number) => {
     try {
@@ -50,6 +52,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(parsedUser);
       fetchCustomerInfo(parsedUser.uid);
     }
+    
+    setLoading(false); // Done loading
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -175,6 +179,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     customer,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
+    loading,
     login,
     signup,
     logout,

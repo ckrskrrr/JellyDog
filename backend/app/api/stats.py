@@ -470,3 +470,70 @@ def inventory_health():
         
     except sqlite3.Error as e:
         return bad_request(f"database error: {e}")
+
+
+# -------------------------------------------------
+# GET /api/stats/all-orders
+# Returns all orders for admin view
+# -------------------------------------------------
+
+@bp.get("/all-orders")
+def all_orders():
+    """
+    GET /api/stats/all-orders
+    
+    Returns all orders with customer and store information for admin.
+    
+    Returns: [{
+        order_id, order_number, order_datetime, total_price, status,
+        customer_name, user_name,
+        store_id, city, state
+    }]
+    """
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        
+        cur.execute(
+            """
+            SELECT 
+                o.order_id,
+                o.order_id as order_number,
+                o.order_datetime,
+                o.total_price,
+                o.status,
+                c.customer_name,
+                u.user_name,
+                s.store_id,
+                s.city,
+                s.state
+            FROM "order" AS o
+            JOIN customers AS c ON o.customer_id = c.customer_id
+            JOIN user AS u ON c.uid = u.uid
+            JOIN store AS s ON o.store_id = s.store_id
+            ORDER BY o.order_datetime DESC;
+            """
+        )
+        
+        rows = cur.fetchall()
+        
+        orders = [
+            {
+                "order_id": row["order_id"],
+                "order_number": row["order_number"],
+                "order_datetime": row["order_datetime"],
+                "total_price": float(row["total_price"]) if row["total_price"] else 0.0,
+                "status": row["status"],
+                "customer_name": row["customer_name"],
+                "user_name": row["user_name"],
+                "store_id": row["store_id"],
+                "city": row["city"],
+                "state": row["state"],
+            }
+            for row in rows
+        ]
+        
+        return jsonify(orders), 200
+        
+    except sqlite3.Error as e:
+        return bad_request(f"database error: {e}")
