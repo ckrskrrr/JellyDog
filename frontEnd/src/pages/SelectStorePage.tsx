@@ -32,9 +32,10 @@ const SelectStorePage = () => {
         const storeData = await response.json();
         setStores(storeData);
         
-        // If no store selected yet, default to first store
+        // If no store selected yet, auto-select first store
         if (!selectedStore && storeData.length > 0) {
           setLocalSelectedId(storeData[0].store_id);
+          setSelectedStore(storeData[0]); // Actually save to context
         } else if (selectedStore) {
           setLocalSelectedId(selectedStore.store_id);
         }

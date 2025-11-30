@@ -79,7 +79,7 @@ const UserPage = () => {
       </div>
 
       {/* Content Area */}
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className={`mx-auto px-6 py-8 ${isAdmin ? 'max-w-[1600px]' : 'max-w-4xl'}`}>
         {/* Customer Content */}
         {!isAdmin && (
           <>

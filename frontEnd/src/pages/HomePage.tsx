@@ -322,8 +322,6 @@ const HomePage = () => {
                             </div>
                           </div>
                         )}
-                        
-                        {!isAdmin && <p className="text-xs text-gray-500 mt-1">Body text.</p>}
                       </div>
                     </div>
                   );
