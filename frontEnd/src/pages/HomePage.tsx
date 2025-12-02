@@ -14,16 +14,6 @@ interface ProductWithStock {
   stock: number;
 }
 
-// Helper function to convert GitHub URLs to raw format
-const fixGitHubImageUrl = (url: string): string => {
-  if (url.includes('github.com') && url.includes('/blob/')) {
-    return url
-      .replace('https://github.com/', 'https://raw.githubusercontent.com/')
-      .replace('/blob/', '/');
-  }
-  return url;
-};
-
 const HomePage = () => {
   const navigate = useNavigate();
   const { selectedStore } = useStore();
@@ -259,7 +249,7 @@ const HomePage = () => {
                       {/* Product Image */}
                       <div className="relative">
                         <img
-                          src={fixGitHubImageUrl(product.img_url)}
+                          src={product.img_url}
                           alt={product.product_name}
                           className={`w-full h-64 object-cover ${
                             isOutOfStock ? 'opacity-40 grayscale' : ''
