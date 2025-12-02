@@ -275,9 +275,9 @@ def return_rate():
         cur.execute(
             """
             SELECT 
-                COUNT(*) FILTER (WHERE is_return = 0) as items_sold,
-                COUNT(*) FILTER (WHERE is_return = 1) as items_returned,
-                SUM(quantity * unit_price) FILTER (WHERE is_return = 1) as revenue_lost
+                SUM(oi.quantity) FILTER (WHERE oi.is_return = 0) as items_sold,
+                SUM(oi.quantity) FILTER (WHERE oi.is_return = 1) as items_returned,
+                SUM(oi.quantity * oi.unit_price) FILTER (WHERE oi.is_return = 1) as revenue_lost
             FROM order_item AS oi
             JOIN "order" AS o ON oi.order_id = o.order_id
             WHERE o.status = 'complete';
@@ -289,30 +289,36 @@ def return_rate():
         total_sold = overall["items_sold"] or 0
         total_returned = overall["items_returned"] or 0
         revenue_lost = float(overall["revenue_lost"]) if overall["revenue_lost"] else 0.0
-        return_rate = (total_returned / total_sold * 100) if total_sold > 0 else 0
+        return_rate = (total_returned / (total_sold+total_returned) * 100) if total_sold > 0 else 0
         
         # Products with highest return rates
         cur.execute(
             """
             SELECT 
-                p.product_id,
-                p.product_name,
-                p.img_url,
-                COUNT(*) FILTER (WHERE oi.is_return = 0) as total_sold,
-                COUNT(*) FILTER (WHERE oi.is_return = 1) as total_returned,
-                CASE 
-                    WHEN COUNT(*) FILTER (WHERE oi.is_return = 0) > 0 
-                    THEN CAST(COUNT(*) FILTER (WHERE oi.is_return = 1) AS FLOAT) / COUNT(*) FILTER (WHERE oi.is_return = 0) * 100
-                    ELSE 0
-                END as return_rate
-            FROM order_item AS oi
-            JOIN products AS p ON oi.product_id = p.product_id
-            JOIN "order" AS o ON oi.order_id = o.order_id
-            WHERE o.status = 'complete'
-            GROUP BY p.product_id, p.product_name, p.img_url
-            HAVING COUNT(*) FILTER (WHERE oi.is_return = 1) > 0
-            ORDER BY return_rate DESC
-            LIMIT 5;
+            p.product_id,
+            p.product_name,
+            p.img_url,
+            COALESCE(SUM(CASE WHEN oi.is_return = 0 THEN oi.quantity ELSE 0 END), 0) as non_returned_sold,
+            COALESCE(SUM(CASE WHEN oi.is_return = 1 THEN oi.quantity ELSE 0 END), 0) as total_returned,
+            COALESCE(SUM(oi.quantity), 0) as total_sold,
+            CASE 
+                WHEN COALESCE(SUM(oi.quantity), 0) > 0 
+                THEN ROUND(
+                    CAST(COALESCE(SUM(CASE WHEN oi.is_return = 1 THEN oi.quantity ELSE 0 END), 0) AS FLOAT) 
+                    / COALESCE(SUM(oi.quantity), 0) 
+                    * 100, 
+                    2
+                )
+                ELSE 0
+            END as return_rate
+        FROM order_item AS oi
+        JOIN products AS p ON oi.product_id = p.product_id
+        JOIN "order" AS o ON oi.order_id = o.order_id
+        WHERE o.status = 'complete'
+        GROUP BY p.product_id, p.product_name, p.img_url
+        HAVING COALESCE(SUM(CASE WHEN oi.is_return = 1 THEN oi.quantity ELSE 0 END), 0) > 0
+        ORDER BY return_rate DESC
+        LIMIT 5;
             """
         )
         
